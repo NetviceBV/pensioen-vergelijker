@@ -1,0 +1,41 @@
+import type { Omgeving, VergelijkResultaat, VergelijkVerzoek } from "../domain/types";
+import { grenzenVoor } from "../domain/grenzen";
+import { valideer } from "../domain/valideer";
+import { VERZEKERAARS, berekenMock, endpointVoor } from "../adapters/mock";
+import { credsVoor, roepAllianzAan } from "./allianz";
+
+interface Body { verzoek: VergelijkVerzoek; omgeving: Omgeving; verzekeraars: string[]; }
+
+// Server-side orchestratie: Allianz gaat live, de overige (demo) verzekeraars
+// blijven mock zodat de vergelijkstaat gevuld blijft.
+export function maakVergelijkHandler(env: Record<string, string | undefined>) {
+  return async function handler(body: Body): Promise<{ omgeving: Omgeving; resultaten: VergelijkResultaat[] }> {
+    const { verzoek, omgeving, verzekeraars } = body;
+    const grenzen = grenzenVoor(verzoek.rol);
+    const resultaten: VergelijkResultaat[] = [];
+
+    for (const id of verzekeraars) {
+      const cfg = VERZEKERAARS.find((c) => c.id === id);
+      if (!cfg || !cfg.producten.includes(verzoek.product)) continue;
+      const endpoint = endpointVoor(cfg, verzoek.product, omgeving);
+
+      const errors = valideer(verzoek, grenzen).filter((p) => p.niveau === "error");
+      if (errors.length) {
+        resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "fout", fouten: errors.map((e) => e.bericht), endpoint });
+        continue;
+      }
+
+      if (cfg.id === "allianz") {
+        const creds = credsVoor(omgeving, env);
+        if (!creds.username || !creds.password) {
+          resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, status: "fout", fouten: [`Geen Allianz-credentials voor "${omgeving}". Zet ALLIANZ_${omgeving.toUpperCase()}_USERNAME/PASSWORD in .env.`], endpoint });
+          continue;
+        }
+        resultaten.push(await roepAllianzAan(verzoek, omgeving, creds as { username: string; password: string }));
+      } else {
+        resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "succes", berekening: berekenMock(verzoek, cfg), endpoint });
+      }
+    }
+    return { omgeving, resultaten };
+  };
+}
