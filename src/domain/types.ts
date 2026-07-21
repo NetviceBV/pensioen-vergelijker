@@ -43,4 +43,6 @@ export interface VergelijkResultaat {
   fouten?: string[];
   berekening?: Berekening;
   endpoint: string;
+  // TIJDELIJK: ruwe request/response voor debugweergave — later weer verwijderen.
+  debug?: { request: unknown; response: unknown };
 }

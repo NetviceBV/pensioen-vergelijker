@@ -109,12 +109,16 @@ export async function roepAllianzAan(
   const endpoint = endpointVoor(cfg, v.product, omgeving);
   const base = { verzekeraarId: "allianz", verzekeraarNaam: "Allianz", endpoint };
 
+  // TIJDELIJK: ruwe request/response voor debugweergave — later weer verwijderen.
+  const payload = buildPayload(v);
+  const ruweRequest = { ...payload, username: creds.username, password: "••••••••" };
+
   let json: any;
   try {
     const form = new FormData();
     form.append("username", creds.username);
     form.append("password", creds.password);
-    for (const [k, val] of Object.entries(buildPayload(v))) form.append(k, val);
+    for (const [k, val] of Object.entries(payload)) form.append(k, val);
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 20_000);
@@ -123,8 +127,10 @@ export async function roepAllianzAan(
       if (!resp.ok) {
         const tekst = await resp.text().catch(() => "");
         let detail: string | undefined;
+        let ruweResponse: unknown = tekst;
         try {
           const body = JSON.parse(tekst);
+          ruweResponse = body;
           const fouten = body?.fouten ?? body?.errors ?? body?.message;
           if (Array.isArray(fouten)) detail = fouten.map((f) => (typeof f === "string" ? f : JSON.stringify(f))).join(" ");
           else if (typeof fouten === "string") detail = fouten;
@@ -137,6 +143,7 @@ export async function roepAllianzAan(
           ...base,
           status: "fout",
           fouten: [`HTTP ${resp.status} van Allianz (${endpoint}).${detail ? ` ${detail}` : ""}`],
+          debug: { request: ruweRequest, response: { httpStatus: resp.status, body: ruweResponse } },
         };
       }
       json = await resp.json();
@@ -144,15 +151,20 @@ export async function roepAllianzAan(
       clearTimeout(timer);
     }
   } catch (e) {
-    return { ...base, status: "fout", fouten: [e instanceof Error ? e.message : "Onbekende fout bij de Allianz-aanroep."] };
+    return {
+      ...base,
+      status: "fout",
+      fouten: [e instanceof Error ? e.message : "Onbekende fout bij de Allianz-aanroep."],
+      debug: { request: ruweRequest, response: null },
+    };
   }
 
   if (json?.status !== "Succes") {
     const fouten = Array.isArray(json?.fouten) ? json.fouten : [String(json?.status ?? "Onbekende status van Allianz.")];
-    return { ...base, status: "fout", fouten };
+    return { ...base, status: "fout", fouten, debug: { request: ruweRequest, response: json } };
   }
 
   const berekening = normaliseer(v, json.output ?? {});
-  if (!berekening) return { ...base, status: "fout", fouten: ["Geen bruikbaar product in het Allianz-antwoord."] };
-  return { ...base, status: "succes", berekening };
+  if (!berekening) return { ...base, status: "fout", fouten: ["Geen bruikbaar product in het Allianz-antwoord."], debug: { request: ruweRequest, response: json } };
+  return { ...base, status: "succes", berekening, debug: { request: ruweRequest, response: json } };
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import type { Omgeving, Product, Uitkeringstermijn, VergelijkResultaat } from "../domain/types";
 import { euro, euro0, pct } from "../domain/format";
@@ -10,7 +11,40 @@ interface Props {
   omgeving: Omgeving;
 }
 
+// TIJDELIJK: knopje + paneel voor ruwe request/response per verzekeraar — later weer verwijderen.
+function DebugKnop({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Ruwe request/response tonen"
+      aria-label="Ruwe request/response tonen"
+      style={{
+        marginLeft: 6, border: "1px solid currentColor", background: open ? "var(--slate-faint)" : "none",
+        color: "var(--slate-faint)", cursor: "pointer", borderRadius: "50%", width: 15, height: 15,
+        lineHeight: "13px", fontSize: 10, fontWeight: 700, padding: 0, display: "inline-block", textAlign: "center", verticalAlign: "middle",
+      }}
+    >
+      i
+    </button>
+  );
+}
+
+function DebugPaneel({ resultaat }: { resultaat: VergelijkResultaat }) {
+  return (
+    <div className="panel" style={{ padding: 14, marginTop: 8 }}>
+      <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>{resultaat.verzekeraarNaam} — ruwe request/response</div>
+      <pre style={{ fontSize: 11, overflowX: "auto", background: "var(--slate-faint)", padding: 10, borderRadius: 6, margin: 0 }}>
+        {resultaat.debug ? JSON.stringify(resultaat.debug, null, 2) : "Geen debug-informatie beschikbaar voor dit resultaat."}
+      </pre>
+    </div>
+  );
+}
+
 export function Resultaat({ resultaten, bezig, product, termijn, omgeving }: Props) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
+
   if (!resultaten && !bezig) {
     return <div className="empty">Kies een product en verzekeraars en bereken de vergelijking.</div>;
   }
@@ -18,15 +52,21 @@ export function Resultaat({ resultaten, bezig, product, termijn, omgeving }: Pro
     return <div className="empty">Berekenen…</div>;
   }
 
+  const geopend = resultaten.filter((r) => open[r.verzekeraarId]);
+
   const gelukt = resultaten.filter((r) => r.status === "succes" && r.berekening);
   if (gelukt.length === 0) {
     return (
-      <div className="panel" style={{ padding: 20 }}>
-        {resultaten.map((r) => (
-          <div key={r.verzekeraarId} className="notice error" style={{ marginBottom: 8 }}>
-            <strong>{r.verzekeraarNaam}:</strong>&nbsp;{r.fouten?.join(" ")}
-          </div>
-        ))}
+      <div className="stack">
+        <div className="panel" style={{ padding: 20 }}>
+          {resultaten.map((r) => (
+            <div key={r.verzekeraarId} className="notice error" style={{ marginBottom: 8 }}>
+              <strong>{r.verzekeraarNaam}:</strong>&nbsp;{r.fouten?.join(" ")}
+              <DebugKnop open={!!open[r.verzekeraarId]} onClick={() => toggle(r.verzekeraarId)} />
+            </div>
+          ))}
+        </div>
+        {geopend.map((r) => <DebugPaneel key={r.verzekeraarId} resultaat={r} />)}
       </div>
     );
   }
@@ -91,7 +131,10 @@ export function Resultaat({ resultaten, bezig, product, termijn, omgeving }: Pro
               {gelukt.map((r) => (
                 <th key={r.verzekeraarId} className={r.verzekeraarId === bestId ? "col-best" : undefined}>
                   {r.verzekeraarId === bestId && <div className="best-mark">◆ Hoogste</div>}
-                  <div className="ins">{r.verzekeraarNaam}</div>
+                  <div className="ins">
+                    {r.verzekeraarNaam}
+                    <DebugKnop open={!!open[r.verzekeraarId]} onClick={() => toggle(r.verzekeraarId)} />
+                  </div>
                 </th>
               ))}
             </tr>
@@ -126,10 +169,13 @@ export function Resultaat({ resultaten, bezig, product, termijn, omgeving }: Pro
           {resultaten.filter((r) => r.status === "fout").map((r) => (
             <div key={r.verzekeraarId} className="notice warning" style={{ marginBottom: 6 }}>
               <strong>{r.verzekeraarNaam}:</strong>&nbsp;{r.fouten?.join(" ")}
+              <DebugKnop open={!!open[r.verzekeraarId]} onClick={() => toggle(r.verzekeraarId)} />
             </div>
           ))}
         </div>
       )}
+
+      {geopend.map((r) => <DebugPaneel key={r.verzekeraarId} resultaat={r} />)}
     </div>
   );
 }

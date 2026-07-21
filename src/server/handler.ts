@@ -33,7 +33,9 @@ export function maakVergelijkHandler(env: Record<string, string | undefined>) {
         }
         resultaten.push(await roepAllianzAan(verzoek, omgeving, creds as { username: string; password: string }));
       } else {
-        resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "succes", berekening: berekenMock(verzoek, cfg), endpoint });
+        const berekening = berekenMock(verzoek, cfg);
+        // TIJDELIJK: ruwe request/response voor debugweergave — later weer verwijderen.
+        resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "succes", berekening, endpoint, debug: { request: verzoek, response: berekening } });
       }
     }
     return { omgeving, resultaten };
