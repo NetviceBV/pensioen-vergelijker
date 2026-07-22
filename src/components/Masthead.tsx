@@ -18,18 +18,7 @@ export function Masthead({ omgeving, onOmgeving }: { omgeving: Omgeving; onOmgev
             <div className="sub">Direct ingaande uitkeringen &middot; meerdere verzekeraars</div>
           </div>
         </div>
-        <div className="env-control">
-          <span className="env-label">Omgeving</span>
-          <div className="seg" role="group" aria-label="Omgeving">
-            {(Object.keys(ENV_META) as Omgeving[]).map((k) => (
-              <button key={k} aria-pressed={k === omgeving} onClick={() => onOmgeving(k)}
-                style={k === omgeving ? { background: "#f2f6f6" } : undefined}>
-                <span className="dot" style={{ background: ENV_META[k].dot }} />
-                {ENV_META[k].label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* TIJDELIJK: omgevingswissel verborgen, achter de schermen alleen acceptatie — later weer tonen. */}
       </div>
     </header>
   );

@@ -16,7 +16,9 @@ import { InvoerPaneel, type FormState } from "./components/InvoerPaneel";
 import { Resultaat } from "./components/Resultaat";
 
 export default function App() {
-  const [omgeving, setOmgeving] = useState<Omgeving>("acceptatie");
+  // TIJDELIJK: omgevingswissel verborgen — achter de schermen altijd acceptatie.
+  // Later weer terugzetten naar useState<Omgeving> + de switcher in Masthead.
+  const omgeving: Omgeving = "acceptatie";
   const [product, setProduct] = useState<Product>("DIZP");
   const [rol, setRol] = useState<Rol>("adviseur");
   const [partnerAan, setPartnerAan] = useState(false);
@@ -108,7 +110,7 @@ export default function App() {
 
   return (
     <div>
-      <Masthead omgeving={omgeving} onOmgeving={setOmgeving} />
+      <Masthead omgeving={omgeving} onOmgeving={() => {}} />
       <EnvRibbon omgeving={omgeving} />
       <main className="wrap">
         <InvoerPaneel
