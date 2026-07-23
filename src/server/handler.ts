@@ -1,6 +1,7 @@
 import type { Omgeving, VergelijkResultaat, VergelijkVerzoek } from "../domain/types";
 import { grenzenVoor } from "../domain/grenzen";
 import { valideer } from "../domain/valideer";
+import { dwingEchtBoven } from "../domain/mockPlafond";
 import { VERZEKERAARS, berekenMock, endpointVoor } from "../adapters/mock";
 import { credsVoor, roepAllianzAan } from "./allianz";
 
@@ -38,6 +39,6 @@ export function maakVergelijkHandler(env: Record<string, string | undefined>) {
         resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "succes", berekening, endpoint, debug: { request: verzoek, response: berekening } });
       }
     }
-    return { omgeving, resultaten };
+    return { omgeving, resultaten: dwingEchtBoven(resultaten) };
   };
 }

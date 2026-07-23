@@ -1,6 +1,7 @@
 import type { Omgeving, VergelijkResultaat, VergelijkVerzoek } from "../domain/types";
 import { grenzenVoor } from "../domain/grenzen";
 import { valideer } from "../domain/valideer";
+import { dwingEchtBoven } from "../domain/mockPlafond";
 import { getVerzekeraar } from "../adapters/registry";
 import { berekenMock, endpointVoor } from "../adapters/mock";
 
@@ -31,7 +32,7 @@ export async function vergelijk(
 
 function vergelijkLokaalMock(verzoek: VergelijkVerzoek, omgeving: Omgeving, verzekeraarIds: string[]): VergelijkResultaat[] {
   const grenzen = grenzenVoor(verzoek.rol);
-  return verzekeraarIds
+  const resultaten = verzekeraarIds
     .map(getVerzekeraar)
     .filter((c): c is NonNullable<typeof c> => Boolean(c))
     .filter((c) => c.producten.includes(verzoek.product))
@@ -43,4 +44,5 @@ function vergelijkLokaalMock(verzoek: VergelijkVerzoek, omgeving: Omgeving, verz
       // TIJDELIJK: ruwe request/response voor debugweergave — later weer verwijderen.
       return { verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "succes" as const, berekening, endpoint, debug: { request: verzoek, response: berekening } };
     });
+  return dwingEchtBoven(resultaten);
 }

@@ -27,6 +27,14 @@ function buildPayload(v: VergelijkVerzoek): Record<string, string> {
   put("uitkeringstermijn", v.uitkeringstermijn);
   put("ingangsdatum", toAllianzDatum(v.ingangsdatum));
 
+  if (v.product === "DIZP" || v.product === "DIKP") {
+    // Niet in de handleiding v1.4, maar sinds kort verplicht op /api/berekenuitkering
+    // (bevestigd tegen acceptatie): zonder dit veld geeft Allianz een HTTP 422
+    // "Veld netto is verplicht". Alleen "0"/"1" worden geaccepteerd; de output
+    // bleek in beide gevallen identiek, dus we sturen altijd 1 mee.
+    put("netto", 1);
+  }
+
   if (v.product === "DIZP") {
     put("garantiepercentage", 100);
     put("hoog_laag_duur", v.hoogLaagDuur);
