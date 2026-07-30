@@ -4,6 +4,7 @@ import { valideer } from "../domain/valideer";
 import { dwingEchtBoven } from "../domain/mockPlafond";
 import { VERZEKERAARS, berekenMock, endpointVoor } from "../adapters/mock";
 import { credsVoor, roepAllianzAan } from "./allianz";
+import { laadAsrCert, roepAsrAan } from "./asr";
 
 interface Body { verzoek: VergelijkVerzoek; omgeving: Omgeving; verzekeraars: string[]; }
 
@@ -33,6 +34,13 @@ export function maakVergelijkHandler(env: Record<string, string | undefined>) {
           continue;
         }
         resultaten.push(await roepAllianzAan(verzoek, omgeving, creds as { username: string; password: string }));
+      } else if (cfg.id === "asr") {
+        const cert = laadAsrCert(omgeving, env);
+        if (!cert) {
+          resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, status: "fout", fouten: [`Geen ASR-clientcertificaat voor "${omgeving}". Zet ASR_PFX_PATH (of ASR_PFX_BASE64) en ASR_PFX_PASSPHRASE in .env.`], endpoint });
+          continue;
+        }
+        resultaten.push(await roepAsrAan(verzoek, omgeving, cert));
       } else {
         const berekening = berekenMock(verzoek, cfg);
         // TIJDELIJK: ruwe request/response voor debugweergave — later weer verwijderen.

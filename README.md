@@ -86,3 +86,51 @@ een body ontvangt en een resultaat teruggeeft) — een latere migratie naar een
 eigen Express/Node-proces betekent alleen een nieuwe dunne adapter schrijven
 (vergelijkbaar met `api/vergelijk.ts` of de middleware in `vite.config.ts`),
 niet het herschrijven van de server-logica zelf.
+
+## a.s.r. (ASR DIP) — live koppeling
+
+a.s.r. loopt via het BMS/eBenefits-platform en wijkt sterk af van Allianz:
+
+- **XML** in en uit (`Content-Type: application/xml`), niet JSON/form-data.
+- **Authenticatie met een client-certificaat (mTLS)**, geen wachtwoord. Je krijgt
+  een PFX-bestand van het eBenefits-team.
+- **Geen uitkeringstermijn in de API**; het antwoord is een maandbedrag. De adapter
+  rekent dat om naar de gekozen termijn.
+- Alleen de **vaste uitkering (DIZP)** is gekoppeld. Variabel en tijdelijk zijn
+  bewust buiten scope gelaten.
+
+### Instellen
+
+1. Plaats het PFX-certificaat buiten versiebeheer, bijvoorbeeld `./certs/asr-client.pfx`
+   (`certs/` en `*.pfx` staan in `.gitignore`).
+2. Vul in `.env` aan:
+
+   ```
+   ASR_PFX_PATH=./certs/asr-client.pfx
+   ASR_PFX_PASSPHRASE=...
+   ```
+
+   Op Vercel (geen bestandssysteem) kun je in plaats daarvan `ASR_PFX_BASE64` zetten
+   met de base64 van het PFX-bestand.
+3. Herstart `npm run dev`, zet de omgeving op **Acceptatie**, kies product **DIZP**,
+   vink **a.s.r.** aan en bereken.
+
+### Endpoints
+
+| Omgeving | URL |
+|---|---|
+| Acceptatie (staging) | `acceptatiebms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP` |
+| Productie | `bms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP` |
+
+ASR heeft geen apart test-endpoint; `test` valt terug op acceptatie.
+
+### Aannames (te bevestigen bij a.s.r.)
+
+- Het teruggegeven `Bruto*Weer`-bedrag is een **maandbedrag** (op grond van de orde
+  van grootte in het voorbeeld). Termijnomrekening en jaarbedrag zijn hierop gebaseerd.
+- `BerekeningSoort=OP`, `Fiscaliteit=B` (bruto), `LevenslangTijdelijkVerhouding=1`.
+- `GegevensPartner` is in het schema verplicht. Zonder partner sturen we het knooppunt
+  mee met `FactorPartnerPensioen=0` en `Bestemming=OP`; met partner `Bestemming=B` en
+  factor = overgangspercentage/100.
+- Netto wordt afgeleid met het vlaktarief van 59% (ASR levert alleen bruto). Garantierente
+  en kosten levert ASR niet — die tonen "—" in de vergelijkstaat.

@@ -28,9 +28,11 @@ export interface VergelijkVerzoek {
 export interface Berekening {
   eersteTermijn: { bruto: number; netto: number };
   perJaar: { bruto: number; netto: number };
-  garantierente: number;
-  poliskostenPerTermijn: number;
-  eenmaligeKosten: number;
+  // Optioneel: niet elke verzekeraar levert deze. ASR geeft alleen het uitkeringsbedrag,
+  // geen garantierente of kostenspecificatie — die tonen dan "—" in de vergelijkstaat.
+  garantierente?: number;
+  poliskostenPerTermijn?: number;
+  eenmaligeKosten?: number;
   band?: { pessimistisch: number; optimistisch: number };
   leeftijd: number;
 }

@@ -24,9 +24,20 @@ const ALLIANZ_URLS: Record<Product, Record<Omgeving, string>> = {
   },
 };
 
+// ASR/BMS (eBenefits) — XML-stream "ASR DIP". Geen apart test-endpoint; test valt
+// terug op staging (acceptatie). Zie de BMS API-documentatie.
+const ASR_URLS: Record<Omgeving, string> = {
+  test: "https://acceptatiebms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP",
+  acceptatie: "https://acceptatiebms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP",
+  productie: "https://bms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP",
+};
+
 export const VERZEKERAARS: VerzekeraarConfig[] = [
   { id: "allianz", naam: "Allianz", producten: ["DIZP", "DIKP", "DIL"], factor: 1.0, rente: 0.67, poliskosten: { maand: 65, kwartaal: 55, halfjaar: 50, jaar: 45 }, admin: 275, distributieEO: 150 },
-  { id: "asr", naam: "a.s.r.", demo: true, producten: ["DIZP", "DIKP", "DIL"], factor: 1.02, rente: 0.7, poliskosten: { maand: 62, kwartaal: 53, halfjaar: 48, jaar: 43 }, admin: 260, distributieEO: 125 },
+  // a.s.r. draait live via de ASR-adapter (server/asr.ts) en ondersteunt hier alleen de
+  // vaste uitkering (DIZP). De factor/rente/poliskosten-velden zijn voor de echte adapter
+  // niet van toepassing en blijven ongebruikt; ze staan er enkel om aan het configtype te voldoen.
+  { id: "asr", naam: "a.s.r.", producten: ["DIZP"], factor: 1.0, rente: 0, poliskosten: { maand: 0, kwartaal: 0, halfjaar: 0, jaar: 0 }, admin: 0, distributieEO: 0 },
   { id: "nn", naam: "Nationale-Nederlanden", demo: true, producten: ["DIZP", "DIL"], factor: 0.995, rente: 0.64, poliskosten: { maand: 68, kwartaal: 57, halfjaar: 52, jaar: 47 }, admin: 290, distributieEO: 160 },
   { id: "zwitserleven", naam: "Zwitserleven", demo: true, producten: ["DIZP", "DIKP"], factor: 1.028, rente: 0.72, poliskosten: { maand: 60, kwartaal: 51, halfjaar: 46, jaar: 41 }, admin: 250, distributieEO: 140 },
 ];
@@ -71,5 +82,6 @@ export function berekenMock(v: VergelijkVerzoek, cfg: VerzekeraarConfig): Bereke
 
 export function endpointVoor(cfg: VerzekeraarConfig, product: Product, env: Omgeving): string {
   if (cfg.id === "allianz") return ALLIANZ_URLS[product][env];
+  if (cfg.id === "asr") return ASR_URLS[env];
   return "— (demo-adapter, API-contract vereist)";
 }

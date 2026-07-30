@@ -81,12 +81,12 @@ export function Resultaat({ resultaten, bezig, product, termijn, omgeving }: Pro
     { label: `Netto per ${termijn}`, get: (r) => euro(r.berekening!.eersteTermijn.netto), accent: true },
     { label: `Bruto per ${termijn}`, get: (r) => euro(r.berekening!.eersteTermijn.bruto) },
     { label: "Netto per jaar", get: (r) => euro(r.berekening!.perJaar.netto) },
-    { label: "Garantierente", get: (r) => pct(r.berekening!.garantierente) },
+    { label: "Garantierente", get: (r) => r.berekening!.garantierente != null ? pct(r.berekening!.garantierente) : "—" },
     ...(product === "DIKP"
       ? [{ label: "Scenariomarge (pess.–opt.)", get: (r: VergelijkResultaat) => r.berekening!.band ? `${euro(r.berekening!.band.pessimistisch)} – ${euro(r.berekening!.band.optimistisch)}` : "—" }]
       : []),
-    { label: `Poliskosten per ${termijn}`, get: (r) => euro(r.berekening!.poliskostenPerTermijn) },
-    { label: "Eenmalige kosten", get: (r) => euro(r.berekening!.eenmaligeKosten) },
+    { label: `Poliskosten per ${termijn}`, get: (r) => r.berekening!.poliskostenPerTermijn != null ? euro(r.berekening!.poliskostenPerTermijn) : "—" },
+    { label: "Eenmalige kosten", get: (r) => r.berekening!.eenmaligeKosten != null ? euro(r.berekening!.eenmaligeKosten) : "—" },
   ];
 
   return (
