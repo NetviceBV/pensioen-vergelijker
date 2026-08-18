@@ -124,10 +124,43 @@ a.s.r. loopt via het BMS/eBenefits-platform en wijkt sterk af van Allianz:
 
 ASR heeft geen apart test-endpoint; `test` valt terug op acceptatie.
 
+### Vast IP op Vercel (whitelisting)
+
+a.s.r. whitelist't op IP-adres. Vercel Functions hebben geen vast uitgaand IP,
+dus zonder maatregelen is elk verzoek vanaf een ander adres afkomstig en wordt
+het geweigerd. Oplossing: een vaste-IP-proxy zoals [Fixie](https://www.fixie.dev)
+(heeft een gratis tier).
+
+- **Lokaal:** niet nodig — je eigen IP is al bij a.s.r. gewhitelist, dus laat
+  `FIXIE_URL` leeg. De aanroep gaat dan direct (zie `laadAsrProxy()` in `asr.ts`).
+- **Op Vercel:** maak een Fixie-account aan, zet de opgegeven proxy-URL als
+  `FIXIE_URL` in de Vercel-projectinstellingen, en laat dát vaste IP whitelisten
+  bij a.s.r. De aanroep tunnelt dan via `https-proxy-agent` door die proxy heen;
+  de mTLS-handshake met a.s.r. zelf (het certificaat) verandert niet — de proxy
+  ziet alleen versleuteld verkeer, geen certificaatgegevens.
+
+### Voorbeeld-XML van a.s.r.
+
+`manuals/2026-01-28 - stream ASR DIP - Example API input.xml` en `...output.xml`
+zijn een door a.s.r. aangeleverd, bevestigd input/output-voorbeeld (niet door ons
+zelf bedacht). De output-tags (`Status`, `BrutoVerwachtWeer`) matchen exact met
+wat `normaliseer()` in `asr.ts` al verwachtte. Het input-voorbeeld bracht wél een
+aantal verplichte attributen aan het licht die we eerder misten op `DIPInvoer`
+(`RtsDatum`, `TariefDatum`, `DnbBestandDatum`, `KortingEenmaligeKosten`,
+`KortingDoorlopendeKosten`, `Daling`, `BerekenPrognose`) en op `DIPKapitaal`
+(`Verevend`, `SexeAfhankelijk`) — die zijn inmiddels toegevoegd in `buildAsrXml()`.
+
 ### Aannames (te bevestigen bij a.s.r.)
 
 - Het teruggegeven `Bruto*Weer`-bedrag is een **maandbedrag** (op grond van de orde
   van grootte in het voorbeeld). Termijnomrekening en jaarbedrag zijn hierop gebaseerd.
+- `RtsDatum`/`TariefDatum`/`DnbBestandDatum` = vandaag (rekendatum voor de actuele
+  tabellen); het a.s.r.-voorbeeld gebruikte één vaste datum voor alle drie, maar
+  bevestigt niet of dit specifiek "vandaag" moet zijn.
+- `KortingEenmaligeKosten=0`, `KortingDoorlopendeKosten=0` (geen kostenkorting
+  aangenomen — a.s.r.'s voorbeeld gebruikte 0 resp. 0.05).
+- `Daling=false`, `BerekenPrognose=false` (één puntberekening, geen prognosereeks).
+- `Verevend=false`, `SexeAfhankelijk=false` op `DIPKapitaal`.
 - `BerekeningSoort=OP`, `Fiscaliteit=B` (bruto), `LevenslangTijdelijkVerhouding=1`.
 - `GegevensPartner` is in het schema verplicht. Zonder partner sturen we het knooppunt
   mee met `FactorPartnerPensioen=0` en `Bestemming=OP`; met partner `Bestemming=B` en

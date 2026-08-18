@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { request as httpsRequest } from "node:https";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import type { Berekening, Omgeving, VergelijkResultaat, VergelijkVerzoek } from "../domain/types";
 import { leeftijdOp } from "../domain/valideer";
 import { endpointVoor, VERZEKERAARS } from "../adapters/mock";
@@ -35,15 +36,33 @@ export function laadAsrCert(omgeving: Omgeving, env: Record<string, string | und
   return { pfx, passphrase };
 }
 
+// a.s.r. whitelist't op IP-adres, maar Vercel Functions hebben geen vast uitgaand
+// IP. Staat FIXIE_URL in de env, dan tunnelt de aanroep door dat vaste-IP-proxy
+// (Fixie) heen; anders gaat de aanroep direct (voldoende voor lokale dev, waar
+// het eigen IP al gewhitelist is).
+export function laadAsrProxy(env: Record<string, string | undefined>): string | undefined {
+  return env.FIXIE_URL || undefined;
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 const geslachtNaarAsr = (g: string) => (g === "man" ? "M" : "V");
+const vandaag = () => new Date().toISOString().slice(0, 10);
 
 // Bouwt het BatchInput-XML voor een vaste uitkering (Variabel=false, levenslang OP).
+// Gebaseerd op het bevestigde voorbeeld van a.s.r. (manuals/2026-01-28 - stream ASR
+// DIP - Example API input.xml), dat een aantal verplichte attributen bevatte die we
+// eerder misten: RtsDatum/TariefDatum/DnbBestandDatum, de kortingsvelden, Daling,
+// BerekenPrognose, en Verevend/SexeAfhankelijk op DIPKapitaal.
 //
 // Aannames — te bevestigen bij a.s.r.:
+//  - RtsDatum/TariefDatum/DnbBestandDatum = vandaag (rekendatum voor de actuele
+//    rente-/tarieftabellen); het voorbeeld gebruikte één vaste datum voor alle drie.
+//  - KortingEenmaligeKosten=0, KortingDoorlopendeKosten=0 (geen kostenkorting aangenomen).
+//  - Daling=false, BerekenPrognose=false (één puntberekening, geen prognosereeks).
+//  - Verevend=false, SexeAfhankelijk=false (standaard unisex-tarief, geen verevening).
 //  - BerekeningSoort=OP, LevenslangTijdelijkVerhouding=1 (levenslang), Fiscaliteit=B (bruto).
 //  - GegevensPartner is verplicht in het schema. Zonder partner sturen we het knooppunt
 //    tóch mee met FactorPartnerPensioen=0 en Bestemming=OP, zodat er geen partnerpensioen
@@ -55,11 +74,12 @@ export function buildAsrXml(v: VergelijkVerzoek): string {
   const factor = heeftPartner ? (v.partner!.overgangspercentage ?? 70) / 100 : 0;
   const partnerGeb = heeftPartner ? v.partner!.geboortedatum : v.deelnemer.geboortedatum;
   const partnerGesl = heeftPartner ? geslachtNaarAsr(v.partner!.geslacht) : v.deelnemer.geslacht === "man" ? "V" : "M";
+  const rekendatum = vandaag();
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <BatchInput BatchSize="1">
-  <DIPInvoer ID="${esc(id)}" Geboortedatum="${esc(v.deelnemer.geboortedatum)}" Geslacht="${geslachtNaarAsr(v.deelnemer.geslacht)}" PensioenDatum="${esc(v.ingangsdatum)}" BerekeningSoort="OP" Variabel="false" LevenslangTijdelijkVerhouding="1">
-    <DIPKapitaal Bedrag="${Math.round(v.kapitaal)}" Fiscaliteit="B" Bestemming="${bestemming}"/>
+  <DIPInvoer ID="${esc(id)}" RtsDatum="${rekendatum}" TariefDatum="${rekendatum}" DnbBestandDatum="${rekendatum}" Geboortedatum="${esc(v.deelnemer.geboortedatum)}" Geslacht="${geslachtNaarAsr(v.deelnemer.geslacht)}" PensioenDatum="${esc(v.ingangsdatum)}" BerekeningSoort="OP" Variabel="false" LevenslangTijdelijkVerhouding="1" KortingEenmaligeKosten="0" KortingDoorlopendeKosten="0" Daling="false" BerekenPrognose="false">
+    <DIPKapitaal Bedrag="${Math.round(v.kapitaal)}" Fiscaliteit="B" Bestemming="${bestemming}" Verevend="false" SexeAfhankelijk="false"/>
     <GegevensPartner Geboortedatum="${esc(partnerGeb)}" Geslacht="${partnerGesl}" FactorPartnerPensioen="${factor}"/>
   </DIPInvoer>
 </BatchInput>`;
@@ -97,7 +117,7 @@ function normaliseer(v: VergelijkVerzoek, xml: string): { berekening: Berekening
   };
 }
 
-function postXmlMetCert(endpoint: string, xml: string, cert: AsrCert): Promise<{ status: number; body: string }> {
+function postXmlMetCert(endpoint: string, xml: string, cert: AsrCert, proxyUrl?: string): Promise<{ status: number; body: string }> {
   const u = new URL(endpoint);
   return new Promise((resolve, reject) => {
     const req = httpsRequest(
@@ -109,6 +129,10 @@ function postXmlMetCert(endpoint: string, xml: string, cert: AsrCert): Promise<{
         method: "POST",
         pfx: cert.pfx,
         passphrase: cert.passphrase,
+        // De proxy tunnelt alleen de TCP-verbinding door (HTTP CONNECT); de
+        // mTLS-handshake met a.s.r. zelf gebeurt nog steeds direct met ons
+        // certificaat, dus authenticatie verandert niet.
+        agent: proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined,
         headers: {
           "Content-Type": "application/xml; charset=utf-8",
           Accept: "application/xml",
@@ -129,18 +153,18 @@ function postXmlMetCert(endpoint: string, xml: string, cert: AsrCert): Promise<{
   });
 }
 
-export async function roepAsrAan(v: VergelijkVerzoek, omgeving: Omgeving, cert: AsrCert): Promise<VergelijkResultaat> {
+export async function roepAsrAan(v: VergelijkVerzoek, omgeving: Omgeving, cert: AsrCert, proxyUrl?: string): Promise<VergelijkResultaat> {
   const cfg = VERZEKERAARS.find((c) => c.id === "asr")!;
   const endpoint = endpointVoor(cfg, v.product, omgeving);
   const base = { verzekeraarId: "asr", verzekeraarNaam: cfg.naam, endpoint };
 
   const xml = buildAsrXml(v);
   // TIJDELIJK: ruwe request/response voor debugweergave — later weer verwijderen.
-  const ruweRequest = { contentType: "application/xml", body: xml };
+  const ruweRequest = { contentType: "application/xml", body: xml, viaProxy: Boolean(proxyUrl) };
 
   let antwoord: { status: number; body: string };
   try {
-    antwoord = await postXmlMetCert(endpoint, xml, cert);
+    antwoord = await postXmlMetCert(endpoint, xml, cert, proxyUrl);
   } catch (e) {
     return {
       ...base,
@@ -157,7 +181,12 @@ export async function roepAsrAan(v: VergelijkVerzoek, omgeving: Omgeving, cert: 
     return { ...base, status: "fout", fouten: [`HTTP 500 van ASR: ${antwoord.body.slice(0, 500) || "onbekende serverfout."}`], debug: { request: ruweRequest, response: ruweResponse } };
   }
   if (antwoord.status === 401) {
-    return { ...base, status: "fout", fouten: ["HTTP 401 van ASR: client-certificaat ontbreekt, is verlopen of wordt niet herkend."], debug: { request: ruweRequest, response: ruweResponse } };
+    return {
+      ...base,
+      status: "fout",
+      fouten: ["HTTP 401 van ASR: certificaat ontbreekt/is verlopen/niet herkend, of de gekoppelde identity heeft geen toegang tot de ASR DIP-stream (BMS-configuratie bij eBenefits)."],
+      debug: { request: ruweRequest, response: ruweResponse },
+    };
   }
 
   const genormaliseerd = normaliseer(v, antwoord.body);
