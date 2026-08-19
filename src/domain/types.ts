@@ -6,6 +6,12 @@ export type Uitkeringstermijn = "maand" | "kwartaal" | "halfjaar" | "jaar";
 export type Scenario = "verwacht" | "pessimistisch" | "optimistisch" | "historisch";
 export type Uitkeringsverloop = "dalend" | "gelijkblijvend";
 
+// Optionele/productspecifieke invoervelden die niet door elke verzekeraar worden
+// gebruikt (bijv. hoogLaagDuur is Allianz-specifiek). Zie VerzekeraarConfig.extraVelden
+// en adapters/registry.ts#relevanteVelden — bepaalt welke velden zichtbaar zijn en
+// welke validatieregels gelden, afhankelijk van de geselecteerde verzekeraars.
+export type VeldKey = "hoogLaagDuur" | "scenario" | "historischStartjaar" | "uitkeringsverloop";
+
 export interface Persoon { geslacht: Geslacht; geboortedatum: string; }
 export interface Partner extends Persoon { overgangspercentage?: number; partnerpensioenPercentage?: number; }
 

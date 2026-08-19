@@ -33,14 +33,27 @@ const ASR_URLS: Record<Omgeving, string> = {
 };
 
 export const VERZEKERAARS: VerzekeraarConfig[] = [
-  { id: "allianz", naam: "Allianz", producten: ["DIZP", "DIKP", "DIL"], factor: 1.0, rente: 0.67, poliskosten: { maand: 65, kwartaal: 55, halfjaar: 50, jaar: 45 }, admin: 275, distributieEO: 150 },
+  {
+    id: "allianz", naam: "Allianz", producten: ["DIZP", "DIKP", "DIL"],
+    // Allianz gebruikt alle optionele velden: hoogLaagDuur (DIZP), scenario +
+    // historischStartjaar + uitkeringsverloop (DIKP, zie allianz.ts voor de
+    // webservice-eisen/bugs die hierachter zitten).
+    extraVelden: { DIZP: ["hoogLaagDuur"], DIKP: ["scenario", "historischStartjaar", "uitkeringsverloop"] },
+    factor: 1.0, rente: 0.67, poliskosten: { maand: 65, kwartaal: 55, halfjaar: 50, jaar: 45 }, admin: 275, distributieEO: 150,
+  },
   // a.s.r. draait live via de ASR-adapter (server/asr.ts): DIZP (vast, Variabel=false)
   // en DIKP (doorbeleggen, Variabel=true). DIL wordt niet ondersteund door de ASR
   // DIP-stream — a.s.r. verschijnt dan automatisch als "niet beschikbaar" (zelfde
   // generieke mechanisme als bij Zwitserleven, dat ook geen DIL heeft).
+  // Bij DIKP gebruikt a.s.r. alleen uitkeringsverloop (→ Daling); geen scenario- of
+  // historisch-concept, en de garantiepercentage-waarde wordt genegeerd (zie asr.ts).
   // De factor/rente/poliskosten-velden zijn voor de echte adapter niet van toepassing
   // en blijven ongebruikt; ze staan er enkel om aan het configtype te voldoen.
-  { id: "asr", naam: "a.s.r.", producten: ["DIZP", "DIKP"], factor: 1.0, rente: 0, poliskosten: { maand: 0, kwartaal: 0, halfjaar: 0, jaar: 0 }, admin: 0, distributieEO: 0 },
+  {
+    id: "asr", naam: "a.s.r.", producten: ["DIZP", "DIKP"],
+    extraVelden: { DIKP: ["uitkeringsverloop"] },
+    factor: 1.0, rente: 0, poliskosten: { maand: 0, kwartaal: 0, halfjaar: 0, jaar: 0 }, admin: 0, distributieEO: 0,
+  },
   { id: "nn", naam: "Nationale-Nederlanden", demo: true, producten: ["DIZP", "DIL"], factor: 0.995, rente: 0.64, poliskosten: { maand: 68, kwartaal: 57, halfjaar: 52, jaar: 47 }, admin: 290, distributieEO: 160 },
   { id: "zwitserleven", naam: "Zwitserleven", demo: true, producten: ["DIZP", "DIKP"], factor: 1.028, rente: 0.72, poliskosten: { maand: 60, kwartaal: 51, halfjaar: 46, jaar: 41 }, admin: 250, distributieEO: 140 },
 ];

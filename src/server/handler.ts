@@ -21,7 +21,7 @@ export function maakVergelijkHandler(env: Record<string, string | undefined>) {
       if (!cfg || !cfg.producten.includes(verzoek.product)) continue;
       const endpoint = endpointVoor(cfg, verzoek.product, omgeving);
 
-      const errors = valideer(verzoek, grenzen).filter((p) => p.niveau === "error");
+      const errors = valideer(verzoek, grenzen, [cfg.id]).filter((p) => p.niveau === "error");
       if (errors.length) {
         resultaten.push({ verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "fout", fouten: errors.map((e) => e.bericht), endpoint });
         continue;

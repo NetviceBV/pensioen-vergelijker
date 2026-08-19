@@ -38,7 +38,7 @@ function vergelijkLokaalMock(verzoek: VergelijkVerzoek, omgeving: Omgeving, verz
     .filter((c) => c.producten.includes(verzoek.product))
     .map((cfg) => {
       const endpoint = endpointVoor(cfg, verzoek.product, omgeving);
-      const errors = valideer(verzoek, grenzen).filter((p) => p.niveau === "error");
+      const errors = valideer(verzoek, grenzen, [cfg.id]).filter((p) => p.niveau === "error");
       if (errors.length) return { verzekeraarId: cfg.id, verzekeraarNaam: cfg.naam, demo: cfg.demo, status: "fout" as const, fouten: errors.map((e) => e.bericht), endpoint };
       const berekening = berekenMock(verzoek, cfg);
       // TIJDELIJK: ruwe request/response voor debugweergave — later weer verwijderen.

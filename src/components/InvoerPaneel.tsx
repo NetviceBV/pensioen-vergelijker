@@ -1,4 +1,4 @@
-import type { Product, Rol, Uitkeringstermijn, VergelijkVerzoek } from "../domain/types";
+import type { Product, Rol, Uitkeringstermijn, VeldKey, VergelijkVerzoek } from "../domain/types";
 import type { Probleem } from "../domain/valideer";
 import type { VerzekeraarConfig } from "../adapters/types";
 import { Field } from "./ui";
@@ -28,6 +28,10 @@ interface Props {
   beschikbaar: VerzekeraarConfig[];
   nietBeschikbaar: VerzekeraarConfig[];
   geselecteerd: string[]; setGeselecteerd: (s: string[]) => void;
+  // Unie van optionele velden die de geselecteerde (en beschikbare) verzekeraars
+  // gebruiken voor het huidige product — bepaalt welke productspecifieke velden
+  // hieronder zichtbaar zijn. Zie adapters/registry.ts#relevanteVelden.
+  relevant: Set<VeldKey>;
   problemen: Probleem[];
   bezig: boolean;
   onBereken: () => void;
@@ -53,6 +57,23 @@ export function InvoerPaneel(p: Props) {
           {p.product === "DIKP" && "Direct ingaand keuzepensioen — doorbeleggen in de uitkeringsfase."}
           {p.product === "DIL" && "Direct ingaande lijfrente — levenslang of tijdelijk."}
         </div>
+      </div>
+
+      <div className="section">
+        <div className="section-head eyebrow">Verzekeraars</div>
+        {p.beschikbaar.map((v) => (
+          <label key={v.id} className="check-row">
+            <span className="check-name">
+              {v.naam}
+              {v.demo && <span className="tag">demo</span>}
+            </span>
+            <input type="checkbox" checked={p.geselecteerd.includes(v.id)}
+              onChange={(e) => p.setGeselecteerd(e.target.checked ? [...p.geselecteerd, v.id] : p.geselecteerd.filter((x) => x !== v.id))} />
+          </label>
+        ))}
+        {p.nietBeschikbaar.map((v) => (
+          <div key={v.id} className="unavailable">{v.naam} — geen {p.product}</div>
+        ))}
       </div>
 
       <div className="section">
@@ -94,7 +115,7 @@ export function InvoerPaneel(p: Props) {
           </select>
         </Field>
 
-        {p.product === "DIZP" && (
+        {p.product === "DIZP" && p.relevant.has("hoogLaagDuur") && (
           <div style={{ marginTop: 13 }}>
             <Field label="Hoog/laag-duur in jaren (optioneel)">
               <input type="number" className="control" placeholder="5 t/m 10" value={form.hoogLaagDuur} onChange={(e) => set("hoogLaagDuur", e.target.value)} />
@@ -107,15 +128,17 @@ export function InvoerPaneel(p: Props) {
               <label style={{ fontSize: 12, fontWeight: 600, color: "var(--slate)" }}>Garantiepercentage: {form.garantiepercentage}%</label>
               <input type="range" min={0} max={100} value={form.garantiepercentage} onChange={(e) => set("garantiepercentage", Number(e.target.value))} style={{ marginTop: 8 }} />
             </div>
-            <div style={{ marginTop: 13 }}>
-              <Field label="Scenario">
-                <select className="control" value={form.scenario} onChange={(e) => set("scenario", e.target.value as FormState["scenario"])}>
-                  <option value="verwacht">verwacht</option><option value="pessimistisch">pessimistisch</option>
-                  <option value="optimistisch">optimistisch</option><option value="historisch">historisch</option>
-                </select>
-              </Field>
-            </div>
-            {form.garantiepercentage < 100 && (
+            {p.relevant.has("scenario") && (
+              <div style={{ marginTop: 13 }}>
+                <Field label="Scenario">
+                  <select className="control" value={form.scenario} onChange={(e) => set("scenario", e.target.value as FormState["scenario"])}>
+                    <option value="verwacht">verwacht</option><option value="pessimistisch">pessimistisch</option>
+                    <option value="optimistisch">optimistisch</option><option value="historisch">historisch</option>
+                  </select>
+                </Field>
+              </div>
+            )}
+            {p.relevant.has("uitkeringsverloop") && (
               <div style={{ marginTop: 13 }}>
                 <Field label="Uitkeringsverloop">
                   <select className="control" value={form.uitkeringsverloop ?? ""} onChange={(e) => set("uitkeringsverloop", (e.target.value || undefined) as FormState["uitkeringsverloop"])}>
@@ -167,23 +190,6 @@ export function InvoerPaneel(p: Props) {
             )}
           </>
         )}
-      </div>
-
-      <div className="section">
-        <div className="section-head eyebrow">Verzekeraars</div>
-        {p.beschikbaar.map((v) => (
-          <label key={v.id} className="check-row">
-            <span className="check-name">
-              {v.naam}
-              {v.demo && <span className="tag">demo</span>}
-            </span>
-            <input type="checkbox" checked={p.geselecteerd.includes(v.id)}
-              onChange={(e) => p.setGeselecteerd(e.target.checked ? [...p.geselecteerd, v.id] : p.geselecteerd.filter((x) => x !== v.id))} />
-          </label>
-        ))}
-        {p.nietBeschikbaar.map((v) => (
-          <div key={v.id} className="unavailable">{v.naam} — geen {p.product}</div>
-        ))}
       </div>
 
       {(errors.length > 0 || warnings.length > 0) && (

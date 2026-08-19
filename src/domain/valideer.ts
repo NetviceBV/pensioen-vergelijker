@@ -13,10 +13,17 @@ export function leeftijdOp(geboorte: string, peil: string): number {
   return a;
 }
 
-export function valideer(v: VergelijkVerzoek, g: Grenzen): Probleem[] {
+// verzekeraarIds: de (op dit moment relevante) verzekeraar(s) waarvoor gevalideerd
+// wordt — bepaalt of verzekeraar-specifieke eisen (bijv. Allianz' webservice-bugs
+// rond uitkeringsverloop/historisch/hoogLaagDuur) daadwerkelijk gelden. Server-side
+// wordt dit per verzekeraar aangeroepen (dus met [cfg.id]); client-side met alle
+// geselecteerde verzekeraars, zodat het formulier alleen eist wat voor de huidige
+// selectie relevant is.
+export function valideer(v: VergelijkVerzoek, g: Grenzen, verzekeraarIds: string[]): Probleem[] {
   const p: Probleem[] = [];
   const err = (veld: string, bericht: string) => p.push({ veld, niveau: "error", bericht });
   const warn = (veld: string, bericht: string) => p.push({ veld, niveau: "warning", bericht });
+  const heeftAllianz = verzekeraarIds.includes("allianz");
 
   const lft = leeftijdOp(v.deelnemer.geboortedatum, v.ingangsdatum);
   if (Number.isNaN(lft)) err("geboortedatum", "Geboortedatum of ingangsdatum is ongeldig.");
@@ -44,20 +51,20 @@ export function valideer(v: VergelijkVerzoek, g: Grenzen): Probleem[] {
   if (v.product === "DIKP") {
     if (v.garantiepercentage == null) {
       err("garantiepercentage", "Garantiepercentage is verplicht bij DIKP.");
-    } else if (v.garantiepercentage < 100) {
+    } else if (heeftAllianz && v.garantiepercentage < 100) {
       if (v.uitkeringsverloop == null)
-        err("uitkeringsverloop", "Uitkeringsverloop is verplicht zodra garantiepercentage lager is dan 100% (webservice-eis).");
+        err("uitkeringsverloop", "Uitkeringsverloop is verplicht zodra garantiepercentage lager is dan 100% (Allianz-webservice-eis).");
       if (v.scenario === "historisch")
         err("scenario", "Historisch scenario in combinatie met garantiepercentage < 100% wordt niet ondersteund door de Allianz-webservice (bevestigde serverfout in de acceptatieomgeving).");
     }
-    if (v.scenario === "historisch" && v.historischStartjaar == null)
+    if (heeftAllianz && v.scenario === "historisch" && v.historischStartjaar == null)
       err("historischStartjaar", "Historisch startjaar is verplicht bij het historische scenario.");
   }
 
-  if (v.product === "DIZP" && v.hoogLaagDuur != null) {
+  if (heeftAllianz && v.product === "DIZP" && v.hoogLaagDuur != null) {
     const { min, max } = g.hoogLaagDuur;
     if (v.hoogLaagDuur < min || v.hoogLaagDuur > max)
-      err("hoogLaagDuur", `Hoog/laag-duur moet tussen ${min} en ${max} jaar liggen (webservice-grens).`);
+      err("hoogLaagDuur", `Hoog/laag-duur moet tussen ${min} en ${max} jaar liggen (Allianz-webservice-grens).`);
   }
 
   if (v.product === "DIL" && v.einddatum && new Date(v.einddatum) <= new Date(v.ingangsdatum))

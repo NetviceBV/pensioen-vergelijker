@@ -8,7 +8,7 @@ import type {
 } from "./domain/types";
 import { grenzenVoor } from "./domain/grenzen";
 import { valideer } from "./domain/valideer";
-import { verzekeraarsVoor, alleVerzekeraars } from "./adapters/registry";
+import { verzekeraarsVoor, alleVerzekeraars, relevanteVelden } from "./adapters/registry";
 import { vergelijk } from "./lib/vergelijk";
 import { Masthead } from "./components/Masthead";
 import { EnvRibbon } from "./components/EnvRibbon";
@@ -54,6 +54,17 @@ export default function App() {
   const nietBeschikbaar = alleVerzekeraars().filter(
     (v) => !v.producten.includes(product),
   );
+  // Alleen de daadwerkelijk bruikbare selectie: geselecteerd én beschikbaar voor
+  // dit product. Bepaalt zowel welke velden zichtbaar zijn (relevanteVelden) als
+  // welke verzekeraar-specifieke validatieregels gelden (valideer()).
+  const actieveIds = useMemo(
+    () => geselecteerd.filter((id) => beschikbaar.some((v) => v.id === id)),
+    [geselecteerd, beschikbaar],
+  );
+  const relevant = useMemo(
+    () => relevanteVelden(product, actieveIds),
+    [product, actieveIds],
+  );
 
   const verzoek: VergelijkVerzoek = useMemo(
     () => ({
@@ -85,18 +96,15 @@ export default function App() {
   );
 
   const problemen = useMemo(
-    () => valideer(verzoek, grenzenVoor(rol)),
-    [verzoek, rol],
+    () => valideer(verzoek, grenzenVoor(rol), actieveIds),
+    [verzoek, rol, actieveIds],
   );
   const heeftErrors = problemen.some((p) => p.niveau === "error");
 
   async function bereken() {
     if (heeftErrors || geselecteerd.length === 0) return;
     setBezig(true);
-    const ids = geselecteerd.filter((id) =>
-      beschikbaar.some((v) => v.id === id),
-    );
-    const res = await vergelijk(verzoek, omgeving, ids);
+    const res = await vergelijk(verzoek, omgeving, actieveIds);
     setResultaten(res);
     setBezig(false);
   }
@@ -126,6 +134,7 @@ export default function App() {
           nietBeschikbaar={nietBeschikbaar}
           geselecteerd={geselecteerd}
           setGeselecteerd={setGeselecteerd}
+          relevant={relevant}
           problemen={problemen}
           bezig={bezig}
           onBereken={bereken}
