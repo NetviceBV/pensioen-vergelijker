@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { request as httpsRequest } from "node:https";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import type { Berekening, Omgeving, VergelijkResultaat, VergelijkVerzoek } from "../domain/types";
-import { leeftijdOp } from "../domain/valideer";
-import { endpointVoor, VERZEKERAARS } from "../adapters/mock";
+import { leeftijdOp } from "../domain/valideer.js";
+import { endpointVoor, VERZEKERAARS } from "../adapters/mock.js";
 
 const TERMIJNEN = { maand: 12, kwartaal: 4, halfjaar: 2, jaar: 1 } as const;
 const NETTO_FLAT = 0.59; // bruto -> netto (zelfde aanname als elders; ASR levert alleen bruto)

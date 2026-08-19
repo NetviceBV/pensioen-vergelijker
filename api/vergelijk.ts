@@ -1,4 +1,10 @@
-import { maakVergelijkHandler } from "../src/server/handler";
+import { maakVergelijkHandler } from "../src/server/handler.js";
+
+// a.s.r.'s eigen batch-executor mag tot 60s duren (zie BMS API-documentatie).
+// 60 is de veiligste waarde die op vrijwel elk Vercel-plan geconfigureerd mag
+// worden (hoger vereist mogelijk een duurder plan — controleer dat voordat je
+// dit optrekt, anders faalt de hele functie bij elke aanroep).
+export const config = { maxDuration: 60 };
 
 // Minimale handler-typen — vervangt de zware devDependency @vercel/node (met een
 // grote transitieve kwetsbaarheden-tree). Vercel injecteert zijn eigen runtime;

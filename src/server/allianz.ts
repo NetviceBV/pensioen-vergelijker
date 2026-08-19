@@ -1,5 +1,5 @@
 import type { Berekening, Omgeving, VergelijkResultaat, VergelijkVerzoek } from "../domain/types";
-import { VERZEKERAARS, endpointVoor } from "../adapters/mock";
+import { VERZEKERAARS, endpointVoor } from "../adapters/mock.js";
 
 const TERMIJNEN = { maand: 12, kwartaal: 4, halfjaar: 2, jaar: 1 } as const;
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

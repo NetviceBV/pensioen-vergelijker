@@ -1,5 +1,5 @@
 import type { VergelijkVerzoek, Berekening, Omgeving, Product } from "../domain/types";
-import { leeftijdOp } from "../domain/valideer";
+import { leeftijdOp } from "../domain/valideer.js";
 import type { VerzekeraarConfig } from "./types";
 
 const TERMIJNEN = { maand: 12, kwartaal: 4, halfjaar: 2, jaar: 1 } as const;
