@@ -51,17 +51,23 @@ function esc(s: string): string {
 const geslachtNaarAsr = (g: string) => (g === "man" ? "M" : "V");
 const vandaag = () => new Date().toISOString().slice(0, 10);
 
-// Bouwt het BatchInput-XML voor een vaste uitkering (Variabel=false, levenslang OP).
-// Gebaseerd op het bevestigde voorbeeld van a.s.r. (manuals/2026-01-28 - stream ASR
-// DIP - Example API input.xml), dat een aantal verplichte attributen bevatte die we
-// eerder misten: RtsDatum/TariefDatum/DnbBestandDatum, de kortingsvelden, Daling,
-// BerekenPrognose, en Verevend/SexeAfhankelijk op DIPKapitaal.
+// Bouwt het BatchInput-XML voor DIZP (Variabel=false, vast) of DIKP (Variabel=true,
+// doorbeleggen). Gebaseerd op het bevestigde voorbeeld van a.s.r. (manuals/2026-01-28
+// - stream ASR DIP - Example API input.xml + de BMS API-addendum), die een aantal
+// verplichte attributen bevatten die we eerder misten: RtsDatum/TariefDatum/
+// DnbBestandDatum, de kortingsvelden, Daling, BerekenPrognose, en Verevend/
+// SexeAfhankelijk op DIPKapitaal.
+//
+// DIKP-mapping: a.s.r. kent geen garantiepercentage-schuif zoals Allianz — enkel
+// vast (Variabel=false) of volledig doorbeleggend (Variabel=true). Bij DIKP wordt
+// dus altijd Variabel="true" gestuurd, ongeacht het gekozen garantiepercentage.
+// `Daling` (hoog-laag-patroon) wordt afgeleid van `uitkeringsverloop`: "dalend" → true.
 //
 // Aannames — te bevestigen bij a.s.r.:
 //  - RtsDatum/TariefDatum/DnbBestandDatum = vandaag (rekendatum voor de actuele
 //    rente-/tarieftabellen); het voorbeeld gebruikte één vaste datum voor alle drie.
 //  - KortingEenmaligeKosten=0, KortingDoorlopendeKosten=0 (geen kostenkorting aangenomen).
-//  - Daling=false, BerekenPrognose=false (één puntberekening, geen prognosereeks).
+//  - BerekenPrognose=false (één puntberekening — alleen het eerste jaar, geen prognosereeks).
 //  - Verevend=false, SexeAfhankelijk=false (standaard unisex-tarief, geen verevening).
 //  - BerekeningSoort=OP, LevenslangTijdelijkVerhouding=1 (levenslang), Fiscaliteit=B (bruto).
 //  - GegevensPartner is verplicht in het schema. Zonder partner sturen we het knooppunt
@@ -75,10 +81,12 @@ export function buildAsrXml(v: VergelijkVerzoek): string {
   const partnerGeb = heeftPartner ? v.partner!.geboortedatum : v.deelnemer.geboortedatum;
   const partnerGesl = heeftPartner ? geslachtNaarAsr(v.partner!.geslacht) : v.deelnemer.geslacht === "man" ? "V" : "M";
   const rekendatum = vandaag();
+  const variabel = v.product === "DIKP";
+  const daling = variabel && v.uitkeringsverloop === "dalend";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <BatchInput BatchSize="1">
-  <DIPInvoer ID="${esc(id)}" RtsDatum="${rekendatum}" TariefDatum="${rekendatum}" DnbBestandDatum="${rekendatum}" Geboortedatum="${esc(v.deelnemer.geboortedatum)}" Geslacht="${geslachtNaarAsr(v.deelnemer.geslacht)}" PensioenDatum="${esc(v.ingangsdatum)}" BerekeningSoort="OP" Variabel="false" LevenslangTijdelijkVerhouding="1" KortingEenmaligeKosten="0" KortingDoorlopendeKosten="0" Daling="false" BerekenPrognose="false">
+  <DIPInvoer ID="${esc(id)}" RtsDatum="${rekendatum}" TariefDatum="${rekendatum}" DnbBestandDatum="${rekendatum}" Geboortedatum="${esc(v.deelnemer.geboortedatum)}" Geslacht="${geslachtNaarAsr(v.deelnemer.geslacht)}" PensioenDatum="${esc(v.ingangsdatum)}" BerekeningSoort="OP" Variabel="${variabel}" LevenslangTijdelijkVerhouding="1" KortingEenmaligeKosten="0" KortingDoorlopendeKosten="0" Daling="${daling}" BerekenPrognose="false">
     <DIPKapitaal Bedrag="${Math.round(v.kapitaal)}" Fiscaliteit="B" Bestemming="${bestemming}" Verevend="false" SexeAfhankelijk="false"/>
     <GegevensPartner Geboortedatum="${esc(partnerGeb)}" Geslacht="${partnerGesl}" FactorPartnerPensioen="${factor}"/>
   </DIPInvoer>
@@ -93,6 +101,9 @@ function xmlTag(xml: string, naam: string): string | undefined {
 // Normaliseert het ASR-antwoord naar de gedeelde Berekening-vorm.
 // Belangrijk: de ASR-API kent geen uitkeringstermijn; het bedrag is een MAANDbedrag
 // (aanname — te bevestigen). We rekenen om naar de door de gebruiker gekozen termijn.
+// Bij DIKP (Variabel=true) levert a.s.r. ook BrutoSlechtWeer/BrutoGoedWeer naast
+// BrutoVerwachtWeer (pessimistisch/verwacht/optimistisch scenario) — die vullen de
+// scenario-band, net als bij de DIKP-band van Allianz.
 function normaliseer(v: VergelijkVerzoek, xml: string): { berekening: Berekening } | { fout: string } {
   const status = xmlTag(xml, "Status");
   if (!status) return { fout: "Geen <Status> in het ASR-antwoord." };
@@ -107,11 +118,24 @@ function normaliseer(v: VergelijkVerzoek, xml: string): { berekening: Berekening
   const jaarBruto = maandBruto * 12;
   const leeftijd = leeftijdOp(v.deelnemer.geboortedatum, v.ingangsdatum) || 0;
 
+  let band: Berekening["band"];
+  if (v.product === "DIKP") {
+    const slecht = Number(xmlTag(xml, "BrutoSlechtWeer"));
+    const goed = Number(xmlTag(xml, "BrutoGoedWeer"));
+    if (Number.isFinite(slecht) && Number.isFinite(goed)) {
+      band = {
+        pessimistisch: round2(slecht * perTermijnFactor * NETTO_FLAT),
+        optimistisch: round2(goed * perTermijnFactor * NETTO_FLAT),
+      };
+    }
+  }
+
   return {
     berekening: {
       eersteTermijn: { bruto: round2(brutoTermijn), netto: round2(brutoTermijn * NETTO_FLAT) },
       perJaar: { bruto: round2(jaarBruto), netto: round2(jaarBruto * NETTO_FLAT) },
       leeftijd,
+      band,
       // ASR levert geen garantierente of kostenspecificatie → optioneel weglaten ("—" in de UI).
     },
   };

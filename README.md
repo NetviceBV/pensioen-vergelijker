@@ -96,8 +96,16 @@ a.s.r. loopt via het BMS/eBenefits-platform en wijkt sterk af van Allianz:
   een PFX-bestand van het eBenefits-team.
 - **Geen uitkeringstermijn in de API**; het antwoord is een maandbedrag. De adapter
   rekent dat om naar de gekozen termijn.
-- Alleen de **vaste uitkering (DIZP)** is gekoppeld. Variabel en tijdelijk zijn
-  bewust buiten scope gelaten.
+- **DIZP (vast, `Variabel=false`) en DIKP (doorbeleggen, `Variabel=true`)** zijn
+  gekoppeld. Tijdelijke uitkeringen zijn bewust buiten scope gelaten
+  (`LevenslangTijdelijkVerhouding` staat altijd op 1, levenslang).
+- a.s.r. kent geen garantiepercentage-schuif zoals Allianz — bij DIKP wordt altijd
+  volledig doorbeleggend (`Variabel="true"`) aangeroepen, ongeacht het gekozen
+  garantiepercentage in de UI. `Daling` (hoog-laag-patroon) volgt wel uit
+  `uitkeringsverloop` ("dalend" → `Daling="true"`).
+- **DIL wordt niet ondersteund** door de ASR DIP-stream; a.s.r. verschijnt dan
+  automatisch als niet-aanklikbaar in de verzekeraarslijst (`producten` in
+  `mock.ts` bevat geen `"DIL"`).
 
 ### Instellen
 
