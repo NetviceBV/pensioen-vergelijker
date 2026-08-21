@@ -54,7 +54,11 @@ export function Resultaat({ resultaten, bezig, product, termijn, omgeving }: Pro
 
   const geopend = resultaten.filter((r) => open[r.verzekeraarId]);
 
-  const gelukt = resultaten.filter((r) => r.status === "succes" && r.berekening);
+  // Beste eerst — de volgorde van de vinklijst zegt niets (die verschuift bij
+  // uit/aanvinken), terwijl aflopend op netto direct laat zien wie wint.
+  const gelukt = resultaten
+    .filter((r) => r.status === "succes" && r.berekening)
+    .sort((a, b) => b.berekening!.eersteTermijn.netto - a.berekening!.eersteTermijn.netto);
   if (gelukt.length === 0) {
     return (
       <div className="stack">

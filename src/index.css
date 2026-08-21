@@ -85,6 +85,11 @@ h1, h2, h3 { font-family: var(--font-serif); font-weight: 600; color: var(--ink-
 /* ---- Layout ---- */
 .wrap { max-width: 1220px; margin: 0 auto; padding: 26px 30px 60px; display: grid; grid-template-columns: 372px 1fr; gap: 26px; align-items: start; }
 @media (max-width: 940px) { .wrap { grid-template-columns: 1fr; } }
+/* Grid-items krimpen standaard niet onder hun content-breedte — zonder dit
+   duwt een lange, niet-afbrekende regel (bijv. de debug-<pre> met ruwe
+   XML/JSON) de hele kolom breder open, ook al scrollt die <pre> zelf al
+   intern (overflow-x: auto). */
+.wrap > section { min-width: 0; }
 
 /* ---- Panels ---- */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
