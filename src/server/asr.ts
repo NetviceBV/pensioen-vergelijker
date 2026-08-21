@@ -99,24 +99,38 @@ function xmlTag(xml: string, naam: string): string | undefined {
 }
 
 // Normaliseert het ASR-antwoord naar de gedeelde Berekening-vorm.
+//
+// Echte respons-vorm (bevestigd via a.s.r.'s eigen PowerShell-testscript, zie
+// manuals/asr-test/asr-dip-proof/ — wijkt af van het eerder aangeleverde
+// voorbeeldbestand!): het bedrag zit in <BrutoNominaal><OPLevenslang>, niet in
+// een los <BrutoVerwachtWeer>. Omdat wij altijd LevenslangTijdelijkVerhouding=1
+// sturen (geen tijdelijk pensioen), is OPLevenslang altijd het juiste veld —
+// zowel bij Variabel=false (DIZP) als Variabel=true (DIKP).
+// <EenmaligeKosten> is wél bruikbaar gebleken (bevestigd: 850 in de live test).
+// <DoorlopendeKosten> laten we vooralsnog buiten beschouwing — onduidelijk of
+// dat een percentage of een bedrag per termijn is (te bevestigen bij a.s.r.).
+//
 // Belangrijk: de ASR-API kent geen uitkeringstermijn; het bedrag is een MAANDbedrag
 // (aanname — te bevestigen). We rekenen om naar de door de gebruiker gekozen termijn.
-// Bij DIKP (Variabel=true) levert a.s.r. ook BrutoSlechtWeer/BrutoGoedWeer naast
-// BrutoVerwachtWeer (pessimistisch/verwacht/optimistisch scenario) — die vullen de
-// scenario-band, net als bij de DIKP-band van Allianz.
+//
+// DIKP-band (pessimistisch/optimistisch): nog NIET bevestigd met een live
+// Variabel=true-respons. We proberen hier de veldnamen uit het eerder ontvangen
+// voorbeeldbestand (BrutoSlechtWeer/BrutoGoedWeer); dit moet opnieuw geverifieerd
+// worden zodra we een echte DIKP-aanroep hebben getest.
 function normaliseer(v: VergelijkVerzoek, xml: string): { berekening: Berekening } | { fout: string } {
   const status = xmlTag(xml, "Status");
   if (!status) return { fout: "Geen <Status> in het ASR-antwoord." };
   if (status.toLowerCase() !== "success") return { fout: `ASR meldde status "${status}".` };
 
-  const verwacht = Number(xmlTag(xml, "BrutoVerwachtWeer"));
-  if (!Number.isFinite(verwacht)) return { fout: "Geen bruikbaar uitkeringsbedrag in het ASR-antwoord." };
+  const opLevenslang = Number(xmlTag(xml, "OPLevenslang"));
+  if (!Number.isFinite(opLevenslang)) return { fout: "Geen bruikbaar uitkeringsbedrag (OPLevenslang) in het ASR-antwoord." };
 
-  const maandBruto = verwacht;
+  const maandBruto = opLevenslang;
   const perTermijnFactor = 12 / TERMIJNEN[v.uitkeringstermijn]; // maand→1, kwartaal→3, halfjaar→6, jaar→12
   const brutoTermijn = maandBruto * perTermijnFactor;
   const jaarBruto = maandBruto * 12;
   const leeftijd = leeftijdOp(v.deelnemer.geboortedatum, v.ingangsdatum) || 0;
+  const eenmaligeKosten = Number(xmlTag(xml, "EenmaligeKosten"));
 
   let band: Berekening["band"];
   if (v.product === "DIKP") {
@@ -136,7 +150,8 @@ function normaliseer(v: VergelijkVerzoek, xml: string): { berekening: Berekening
       perJaar: { bruto: round2(jaarBruto), netto: round2(jaarBruto * NETTO_FLAT) },
       leeftijd,
       band,
-      // ASR levert geen garantierente of kostenspecificatie → optioneel weglaten ("—" in de UI).
+      eenmaligeKosten: Number.isFinite(eenmaligeKosten) ? eenmaligeKosten : undefined,
+      // Garantierente en poliskosten-per-termijn levert ASR niet → "—" in de vergelijkstaat.
     },
   };
 }
@@ -153,13 +168,22 @@ function postXmlMetCert(endpoint: string, xml: string, cert: AsrCert, proxyUrl?:
         method: "POST",
         pfx: cert.pfx,
         passphrase: cert.passphrase,
+        // BEVESTIGDE ROOT CAUSE van de aanhoudende ECONNRESET/socket hang up: a.s.r.'s
+        // server heeft een TLS 1.3 post-handshake-clientauthenticatie-incompatibiliteit
+        // met Node/OpenSSL — bij TLS 1.3 (Node's default) reset de verbinding altijd,
+        // bij TLS 1.2 (client-cert tijdens de handshake zelf, geen PHA) lukt het
+        // probleemloos. Bevestigd met identieke requests, alleen de TLS-versie
+        // verschillend — zie manuals/asr-support-vraag.md. Dit stond los van IP-
+        // whitelisting: TLS 1.2 werkte zelfs vanaf een nooit-gewhiteliste testomgeving.
+        maxVersion: "TLSv1.2",
         // De proxy tunnelt alleen de TCP-verbinding door (HTTP CONNECT); de
         // mTLS-handshake met a.s.r. zelf gebeurt nog steeds direct met ons
         // certificaat, dus authenticatie verandert niet.
         agent: proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined,
+        // Headers exact zoals a.s.r.'s eigen werkende testscript (manuals/asr-test/):
+        // geen charset-parameter, geen Accept-header.
         headers: {
-          "Content-Type": "application/xml; charset=utf-8",
-          Accept: "application/xml",
+          "Content-Type": "application/xml",
           "Content-Length": Buffer.byteLength(xml, "utf8"),
         },
       },

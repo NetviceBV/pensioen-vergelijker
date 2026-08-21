@@ -26,10 +26,13 @@ const ALLIANZ_URLS: Record<Product, Record<Omgeving, string>> = {
 
 // ASR/BMS (eBenefits) — XML-stream "ASR DIP". Geen apart test-endpoint; test valt
 // terug op staging (acceptatie). Zie de BMS API-documentatie.
+// Let op de trailing slash — zonder die slash resette de verbinding altijd
+// (bevestigd door a.s.r.'s eigen werkende PowerShell-testscript, dat wél een
+// trailing slash gebruikt). Zie manuals/asr-test/.
 const ASR_URLS: Record<Omgeving, string> = {
-  test: "https://acceptatiebms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP",
-  acceptatie: "https://acceptatiebms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP",
-  productie: "https://bms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP",
+  test: "https://acceptatiebms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP/",
+  acceptatie: "https://acceptatiebms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP/",
+  productie: "https://bms.mijnpensioenportaal.nl/public/api/processor/execute-v1/ASR%20DIP/",
 };
 
 export const VERZEKERAARS: VerzekeraarConfig[] = [
